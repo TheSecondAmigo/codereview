@@ -1,0 +1,6 @@
+p4 diff does not generate differences for newly added (via 'p4 add') files which have not yet
+been committed. CodeStriker is an example code inspection tool which can benefit from this script.
+
+This script (codereview.py) generates the diff output using "p4 diff" for modified files and unified 
+diff ('diff -i') for newly added files
+
