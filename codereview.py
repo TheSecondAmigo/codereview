@@ -1,6 +1,4 @@
 #!/usr/local/bin/python
-# Author: Siva Kumar
-# 
 
 """
     This program creates a "p4 diff" output which can be used in conjunction 
@@ -38,7 +36,33 @@ Options:
     [files]        : one or more files explicitly named. In absence of files, all opened files are used to
                      generate the diff output. "..." has the special meaning of "current directory"
 
-""" % (sys.argv[0], P4DEFAULT_OPT)
+
+    Typical Uses Cases:
+    1.	
+        cd <your-workspace> 
+        %s > p4diffs-all-files
+
+    2.	
+        cd <your-workspace/some-directory> 
+        %s ... > p4diffs-files-in-this-directory-and-below
+
+    3.	
+        cd <your-workspace> 
+        %s foo1.c dir2/foo2.py ../dir3/foo3.h > p4diffs-specific-files
+
+    In all three examples above, codereview.py can handle modified and newly added files
+
+    In the 1st case, ALL files that have been modified and ADDED are included in the "diff output"
+
+    In the 2nd case, ALL files that have been modified and ADDED in *the current directory and below* are 
+    included in the "diff output"
+
+    In the 3rd case, just the explicitly listed files are included in the 'diff output"
+
+
+
+
+""" % (sys.argv[0], P4DEFAULT_OPT, sys.argv[0], sys.argv[0], sys.argv[0])
 
 
 def main():
@@ -76,10 +100,18 @@ def main():
     # //depot/icm/proj/Appia/rev1.0/dev/newArchitecture/...  \
     # //skumar+Appia+rev1.0+3/newArchitecture/... \
     # /u/skumar/wa/HHead/newArchitecture/...
-    vals = str(output).split(' ')
+    vals = str(output).split()
 
-    p4depot = vals[0]
-    myhome = vals[2]
+    p4depot = None
+    for v in vals[::-1]:
+        if v.startswith('//depot'):
+            p4depot = v
+            break
+    if not p4depot:
+        print "Error in reading p4 depot info: %s couldn't be parsed\n" % (output,)
+        sys.exit(1)
+
+    myhome = vals[-1]
     # get rid of trailing "..."
     p4depot = p4depot[0:p4depot.rindex("...")]
     myhome = myhome[0:myhome.rindex("...")]
