@@ -90,6 +90,27 @@ def main():
 
     output = ""
 
+    pipe = subprocess.Popen("p4 info", stdout=subprocess.PIPE, shell=True)
+    (output, err) = pipe.communicate()
+    if err or output == "":
+        print "Error: %s, maybe not in p4 workspace?" % (err, )
+        sys.exit(1)
+    vals = str(output).split('\n')
+    myclroot = None
+    mycwd = None
+    for v in vals:
+        if v.startswith("Client root:"):
+            myclroot = v[len("Client root:"):].strip() + '/'
+        elif v.startswith("Current directory:"):
+            mycwd = v[len("Current directory:"):].strip() + '/'
+        if myclroot and mycwd:
+            break
+
+    if not myclroot or not mycwd:
+        print "Error: Unable to parse 'p4 info output' %s\n" % (output, )
+        sys.exit(1)
+
+    output = ""
     pipe = subprocess.Popen("p4 where", stdout=subprocess.PIPE, shell=True)
     (output, err) = pipe.communicate()
     if err or output == "":
@@ -111,10 +132,11 @@ def main():
         print "Error in reading p4 depot info: %s couldn't be parsed\n" % (output,)
         sys.exit(1)
 
-    myhome = vals[-1]
-    # get rid of trailing "..."
-    p4depot = p4depot[0:p4depot.rindex("...")]
-    myhome = myhome[0:myhome.rindex("...")]
+    if len(myclroot) != len(mycwd):
+        p4depot = p4depot[0:p4depot.index(mycwd[len(myclroot):])]
+    else: 
+        # get rid of trailing "..."
+        p4depot = p4depot[0:p4depot.rindex("...")]
 
     pipe = subprocess.Popen("p4 opened " + myfiles, 
                          stdout=subprocess.PIPE, shell=True)
@@ -131,13 +153,17 @@ def main():
         if line.find("edit default change") != -1:
             myf = line.split(" ")[0]
             myf = myf[0:myf.rindex('#')]
-            myf = myf.replace(p4depot, myhome, 1)
+            myf = myf.replace(p4depot, myclroot, 1)
             existingfiles.append(myf)
         elif line.find("add default change") != -1:
             myf = line.split(" ")[0]
             myf = myf[0:myf.rindex('#')]
             # a tuple of "depot" file and actual file
-            newfiles.append((myf, myf.replace(p4depot, myhome, 1)))
+            newfiles.append((myf, myf.replace(p4depot, myclroot, 1)))
+
+    if len(existingfiles) == 0 and len(newfiles) == 0:
+        print "Nothing modified or added\n"
+        sys.exit(0)
 
     # Now write to stdout the p4 differences for existing (modified) files
     modfiles = " ".join(existingfiles)
