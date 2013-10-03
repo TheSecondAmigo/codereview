@@ -148,9 +148,9 @@ def main():
     lines = str(output).split('\n')
     # The output looks like this for each "p4 opened" file
     # //depot/<SNIP>ev/newArchitecture/firmware/include/dbgMsgs.h#3 - \
-    #                                                 edit default changes
+    #                                                 edit change
     for line in lines:
-        if line.find("edit default change") != -1:
+        if (line.find("edit change") != -1) or (line.find("edit default change") != -1):
             myf = line.split(" ")[0]
             myf = myf[0:myf.rindex('#')]
             myf = myf.replace(p4depot, myclroot, 1)
