@@ -1,13 +1,14 @@
-#!/usr/local/bin/python
+#!/usr/bin/env python
 
 """
-    This program creates a "p4 diff" output which can be used in conjunction 
-    with CodeStriker p4 diff has the problem of not being able to 
+    This program creates a "p4 diff" output which can be used in conjunction
+    with CodeStriker p4 diff has the problem of not being able to
     "diff" NEW (added) files
     This wrapper script uses unified diff to overcome this issue
 """
 
 import sys
+import os
 import subprocess
 
 
@@ -20,7 +21,7 @@ USAGE_MSG = """
 
     "p4 diff" doesn't handle newly added files, so this script uses unified diff for new files
 
-    The default behavior is to generate a diff for all files opened, but a user can 
+    The default behavior is to generate a diff for all files opened, but a user can
     specify files explicitly or use "..." to indicate files in the current directory (and below)
 
     The difference output goes to stdout.
@@ -30,7 +31,7 @@ Options:
     -h|--help      : displays the help message
 
     [p4 diff opts] : such as -du, etc. See 'p4 help diff' for further details
-                     The default option used for "p4 diff" is %s, but a user can override this with 
+                     The default option used for "p4 diff" is %s, but a user can override this with
     cmd-line options
 
     [files]        : one or more files explicitly named. In absence of files, all opened files are used to
@@ -38,31 +39,71 @@ Options:
 
 
     Typical Uses Cases:
-    1.	
-        cd <your-workspace> 
+    1.
+        cd <your-workspace>
         %s > p4diffs-all-files
 
-    2.	
-        cd <your-workspace/some-directory> 
+    2.
+        cd <your-workspace/some-directory>
         %s ... > p4diffs-files-in-this-directory-and-below
 
-    3.	
-        cd <your-workspace> 
+    3.
+        cd <your-workspace>
         %s foo1.c dir2/foo2.py ../dir3/foo3.h > p4diffs-specific-files
 
     In all three examples above, codereview.py can handle modified and newly added files
 
     In the 1st case, ALL files that have been modified and ADDED are included in the "diff output"
 
-    In the 2nd case, ALL files that have been modified and ADDED in *the current directory and below* are 
+    In the 2nd case, ALL files that have been modified and ADDED in *the current directory and below* are
     included in the "diff output"
 
-    In the 3rd case, just the explicitly listed files are included in the 'diff output"
+    In the 3rd case, just the explicitly listed files are included in the "diff output"
 
 
 
 
 """ % (sys.argv[0], P4DEFAULT_OPT, sys.argv[0], sys.argv[0], sys.argv[0])
+
+def getp4depotinfo():
+    output = ""
+    pipe = subprocess.Popen("p4 where", stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
+    (output, err) = pipe.communicate()
+    if err or output == "":
+        pipe = subprocess.Popen("p4 client -o", stdout=subprocess.PIPE, shell=True)
+        (output, err) = pipe.communicate()
+        vals = str(output).split('\n')
+        #
+        # View:
+        # //depot/branch/pioneer-sivak-br1/... //sb14-pioneer-sivak-br1/...
+        try:
+            p4depot = vals[vals.index('View:')+1]
+            p4depot = p4depot.strip()
+            vals = p4depot.split()
+            p4depot = None
+            for v in vals[::-1]:
+                if v.startswith('//depot'):
+                    p4depot = v
+                    break
+
+        except indexError:
+            print "Couldn't get p4depot info"
+            sys.exit(1)
+    else:
+
+        # The output looks like this:
+        # //depot/icm/proj/Appia/rev1.0/dev/newArchitecture/...  \
+        # //skumar+Appia+rev1.0+3/newArchitecture/... \
+        # /u/skumar/wa/HHead/newArchitecture/...
+        vals = str(output).split()
+
+        p4depot = None
+        for v in vals[::-1]:
+            if v.startswith('//depot'):
+                p4depot = v
+                break
+
+    return p4depot
 
 
 def main():
@@ -70,10 +111,10 @@ def main():
     Function generates the p4 diff and unified diff for the files
     """
 
-    myfiles = ""
+    myfiles = []
     myopts = None
 
-    # let's see what cmd-line args are passed. A leading "-" is treated as an 
+    # let's see what cmd-line args are passed. A leading "-" is treated as an
     # option to 'p4 diff'unless it's "-h" or "--help"
 
     for arg in sys.argv[1:]:
@@ -83,7 +124,7 @@ def main():
         elif arg.startswith('-'):
             myopts += arg + " "
         else:
-            myfiles += arg + " "
+            myfiles.append(arg)
 
     if not myopts:
         myopts = P4DEFAULT_OPT
@@ -100,9 +141,9 @@ def main():
     mycwd = None
     for v in vals:
         if v.startswith("Client root:"):
-            myclroot = v[len("Client root:"):].strip() + '/'
+            myclroot = v[len("Client root:"):].strip()
         elif v.startswith("Current directory:"):
-            mycwd = v[len("Current directory:"):].strip() + '/'
+            mycwd = v[len("Current directory:"):].strip()
         if myclroot and mycwd:
             break
 
@@ -110,35 +151,47 @@ def main():
         print "Error: Unable to parse 'p4 info output' %s\n" % (output, )
         sys.exit(1)
 
-    output = ""
-    pipe = subprocess.Popen("p4 where", stdout=subprocess.PIPE, shell=True)
-    (output, err) = pipe.communicate()
-    if err or output == "":
-        print "Error: %s, maybe not in p4 workspace?" % (err, )
-        sys.exit(1)
+    # Client root: /fs/home/sivak/links/sb14-ws/pioneer-sivak-br1
+    # Current directory: /.automount/nfs.panwest.panasas.com/root/sb14/sivak/pioneer-sivak-br1/src/osd
 
-    # The output looks like this:
-    # //depot/icm/proj/Appia/rev1.0/dev/newArchitecture/...  \
-    # //skumar+Appia+rev1.0+3/newArchitecture/... \
-    # /u/skumar/wa/HHead/newArchitecture/...
-    vals = str(output).split()
+    bname = os.path.basename(myclroot)
+    dname = os.path.dirname(myclroot)
 
-    p4depot = None
-    for v in vals[::-1]:
-        if v.startswith('//depot'):
-            p4depot = v
-            break
+    l = mycwd.split(os.path.sep)
+    nl = l[l.index(bname):]
+    realcwd = dname + os.path.sep + os.path.sep.join(nl)
+
+    myclroot += os.path.sep
+    mycwd += os.path.sep
+
+
+    p4depot = getp4depotinfo()
+
     if not p4depot:
         print "Error in reading p4 depot info: %s couldn't be parsed\n" % (output,)
         sys.exit(1)
 
-    if len(myclroot) != len(mycwd):
-        p4depot = p4depot[0:p4depot.index(mycwd[len(myclroot):])]
-    else: 
-        # get rid of trailing "..."
-        p4depot = p4depot[0:p4depot.rindex("...")]
+    # if len(myclroot) != len(mycwd):
+    #     p4depot = p4depot[0:p4depot.index(mycwd[len(myclroot):])]
+    # else:
+    #     # get rid of trailing "..."
+    #     p4depot = p4depot[0:p4depot.rindex("...")]
 
-    pipe = subprocess.Popen("p4 opened " + myfiles, 
+    # get rid of trailing "..."
+
+    fullfiles = []
+    for f in myfiles:
+        # check to make sure that the file is NOT full-qualified already
+        if not f.startswith(os.path.sep):
+            fullfiles.append(realcwd + os.path.sep + f)
+        else:
+            fullfiles.append(f)
+
+
+    filelist = " ".join(fullfiles)
+    p4depot = p4depot[0:p4depot.rindex("...")]
+
+    pipe = subprocess.Popen("p4 opened " + filelist,
                          stdout=subprocess.PIPE, shell=True)
 
     (output, err) = pipe.communicate()
@@ -165,13 +218,17 @@ def main():
         print "Nothing modified or added\n"
         sys.exit(0)
 
-    # Now write to stdout the p4 differences for existing (modified) files
-    modfiles = " ".join(existingfiles)
-    pipe = subprocess.Popen("p4 diff " + myopts + " " + modfiles,
-                         stdout=subprocess.PIPE, shell=True)
-    (output, err) = pipe.communicate()
+    newoutput = ""
 
-    newoutput = output
+    # Now write to stdout the p4 differences for existing (modified) files
+    if len(existingfiles) != 0:
+        modfiles = " ".join(existingfiles)
+        pipe = subprocess.Popen("p4 diff " + myopts + " " + modfiles,
+                         stdout=subprocess.PIPE, shell=True)
+        (output, err) = pipe.communicate()
+
+        newoutput = output
+
     for nfiles in newfiles:
         newoutput += "==== %s#0 - %s ====\n" % (nfiles[0], nfiles[1])
         pipe = subprocess.Popen("diff -u  /dev/null %s" % (nfiles[1]),
