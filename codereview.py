@@ -66,18 +66,23 @@ Options:
 """ % (sys.argv[0], P4DEFAULT_OPT, sys.argv[0], sys.argv[0], sys.argv[0])
 
 def getp4depotinfo():
+    """
+        get the p4 depot information
+    """
     output = ""
-    pipe = subprocess.Popen("p4 where", stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
+    pipe = subprocess.Popen("p4 where", stdout=subprocess.PIPE,
+                            stderr=subprocess.PIPE, shell=True)
     (output, err) = pipe.communicate()
     if err or output == "":
-        pipe = subprocess.Popen("p4 client -o", stdout=subprocess.PIPE, shell=True)
+        pipe = subprocess.Popen("p4 client -o", stdout=subprocess.PIPE,
+                                shell=True)
         (output, err) = pipe.communicate()
         vals = str(output).split('\n')
         #
         # View:
         # //depot/branch/pioneer-sivak-br1/... //sb14-pioneer-sivak-br1/...
         try:
-            p4depot = vals[vals.index('View:')+1]
+            p4depot = vals[vals.index('View:') + 1]
             p4depot = p4depot.strip()
             vals = p4depot.split()
             p4depot = None
@@ -86,7 +91,7 @@ def getp4depotinfo():
                     p4depot = v
                     break
 
-        except indexError:
+        except IndexError:
             print "Couldn't get p4depot info"
             sys.exit(1)
     else:
@@ -152,7 +157,8 @@ def main():
         sys.exit(1)
 
     # Client root: /fs/home/sivak/links/sb14-ws/pioneer-sivak-br1
-    # Current directory: /.automount/nfs.panwest.panasas.com/root/sb14/sivak/pioneer-sivak-br1/src/osd
+    # Current directory:
+    #  /<...>/root/sb14/sivak/pioneer-sivak-br1/src/osd
 
     bname = os.path.basename(myclroot)
     dname = os.path.dirname(myclroot)
@@ -164,11 +170,11 @@ def main():
     myclroot += os.path.sep
     mycwd += os.path.sep
 
-
     p4depot = getp4depotinfo()
 
     if not p4depot:
-        print "Error in reading p4 depot info: %s couldn't be parsed\n" % (output,)
+        print "Error in reading p4 depot info: %s couldn't be parsed\n" % (
+                                        output,)
         sys.exit(1)
 
     # if len(myclroot) != len(mycwd):
@@ -187,7 +193,6 @@ def main():
         else:
             fullfiles.append(f)
 
-
     filelist = " ".join(fullfiles)
     p4depot = p4depot[0:p4depot.rindex("...")]
 
@@ -203,7 +208,8 @@ def main():
     # //depot/<SNIP>ev/newArchitecture/firmware/include/dbgMsgs.h#3 - \
     #                                                 edit change
     for line in lines:
-        if (line.find("edit change") != -1) or (line.find("edit default change") != -1):
+        if (line.find("edit change") != -1) or (
+                        line.find("edit default change") != -1):
             myf = line.split(" ")[0]
             myf = myf[0:myf.rindex('#')]
             myf = myf.replace(p4depot, myclroot, 1)
@@ -246,6 +252,6 @@ def main():
 
 # Main code
 
-if __name__ == '__main__' :
+if __name__ == '__main__':
     main()
 
